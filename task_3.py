@@ -1,282 +1,257 @@
-import tkinter as tk
+from tkinter import *
 from tkinter import scrolledtext, messagebox
 import requests
 import json
 import os
-import threading
+
+if not os.path.exists("resource"):
+    os.makedirs("resource")
+
+save_file = "resource/save.json"
+url = "https://www.cbr-xml-daily.ru/daily_json.js"
+data = None
+groups = {}
+
+try:
+    with open(save_file, "r", encoding="utf-8") as f:
+        groups = json.load(f)
+except:
+    groups = {}
+
+root = Tk()
+root.title("Курсы валют")
+root.geometry("650x550")
+
+Label(root, text="КУРСЫ ВАЛЮТ", font=("Arial", 16, "bold")).pack(pady=10)
+
+try:
+    response = requests.get(url, timeout=5)
+    if response.status_code == 200:
+        data = response.json()["Valute"]
+        status_text = "Данные загружены"
+    else:
+        status_text = "Ошибка загрузки"
+except:
+    status_text = "Ошибка соединения"
 
 
-class CurrencyApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Курсы валют")
-        self.root.geometry("600x500")
+def show_all():
+    if not data:
+        status.config(text="Данные не загружены")
+        return
 
-        if not os.path.exists("resource"):
-            os.makedirs("resource")
+    result_text.delete(1.0, END)
+    result_text.insert(END, "ВСЕ ВАЛЮТЫ:\n")
+    result_text.insert(END, "-" * 60 + "\n")
 
-        self.save_file = "resource/save.json"
-        self.url = "https://www.cbr-xml-daily.ru/daily_json.js"
-        self.currency_data = None
-        self.groups = self.load_groups()
-
-        tk.Label(root, text="КУРСЫ ВАЛЮТ", font=("Arial", 14, "bold")).pack(pady=5)
-
-        tk.Label(root, text="Выберите действие:").pack()
-
-        btn_frame = tk.Frame(root)
-        btn_frame.pack(pady=5)
-
-        tk.Button(
-            btn_frame, text="1. Все валюты", width=20, command=self.show_all_currencies
-        ).pack(pady=2)
-        tk.Button(
-            btn_frame, text="2. Поиск по коду", width=20, command=self.search_dialog
-        ).pack(pady=2)
-        tk.Button(
-            btn_frame,
-            text="3. Создать группу",
-            width=20,
-            command=self.create_group_dialog,
-        ).pack(pady=2)
-        tk.Button(
-            btn_frame, text="4. Мои группы", width=20, command=self.show_groups
-        ).pack(pady=2)
-        tk.Button(
-            btn_frame,
-            text="5. Добавить в группу",
-            width=20,
-            command=self.add_to_group_dialog,
-        ).pack(pady=2)
-        tk.Button(
-            btn_frame,
-            text="6. Удалить из группы",
-            width=20,
-            command=self.remove_from_group_dialog,
-        ).pack(pady=2)
-
-        tk.Label(root, text="Результаты:").pack()
-        self.result_text = scrolledtext.ScrolledText(root, height=15)
-        self.result_text.pack(fill="both", padx=10, pady=5, expand=True)
-
-        self.status = tk.Label(
-            root, text="Готов к работе", bd=1, relief="sunken", anchor="w"
+    count = 0
+    for code, info in data.items():
+        result_text.insert(
+            END,
+            f"{code} – {info['Name']} – {info['Value']} руб. за {info['Nominal']}\n",
         )
-        self.status.pack(fill="x", padx=10, pady=2)
+        count += 1
+        if count >= 20:
+            result_text.insert(END, f"... и еще {len(data) - 20} валют\n")
+            break
 
-        self.load_currency_data()
+    result_text.insert(END, f"Всего: {len(data)} валют\n")
+    result_text.see(END)
 
-    def load_currency_data(self):
-        def load():
-            try:
-                response = requests.get(self.url, timeout=5)
-                if response.status_code == 200:
-                    self.currency_data = response.json()["Valute"]
-                    self.root.after(0, self.update_status, "Данные загружены")
-                else:
-                    self.root.after(0, self.update_status, "Ошибка загрузки")
-            except Exception as e:
-                self.root.after(0, self.update_status, f"Ошибка: {str(e)}")
 
-        thread = threading.Thread(target=load)
-        thread.daemon = True
-        thread.start()
+def search_dialog():
+    dialog = Toplevel(root)
+    dialog.title("Поиск валюты")
+    dialog.geometry("250x100")
 
-    def show_all_currencies(self):
-        if not self.currency_data:
-            self.update_status("Данные еще не загружены")
+    Label(dialog, text="Код валюты (USD, EUR):").pack(pady=5)
+    entry = Entry(dialog)
+    entry.pack(pady=5)
+
+    def search():
+        code = entry.get().upper().strip()
+        dialog.destroy()
+
+        if not data:
+            status.config(text="Данные не загружены")
             return
 
-        self.result_text.delete(1.0, tk.END)
-        self.result_text.insert(tk.END, "ВСЕ ВАЛЮТЫ:\n")
-        self.result_text.insert(tk.END, "-" * 50 + "\n")
+        result_text.delete(1.0, END)
 
-        for code, info in self.currency_data.items():
-            self.result_text.insert(
-                tk.END,
-                f"{code} – {info['Name']} – {info['Value']} руб. за {info['Nominal']}\n",
+        if code in data:
+            info = data[code]
+            result_text.insert(END, f"{code} – {info['Name']}\n")
+            result_text.insert(END, "-" * 40 + "\n")
+            result_text.insert(
+                END, f"Курс: {info['Value']} руб. за {info['Nominal']}\n"
             )
-
-    def search_dialog(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Поиск валюты")
-        dialog.geometry("250x100")
-
-        tk.Label(dialog, text="Введите код (USD, EUR):").pack(pady=5)
-        entry = tk.Entry(dialog)
-        entry.pack(pady=5)
-
-        def search():
-            code = entry.get().upper().strip()
-            dialog.destroy()
-            self.search_currency(code)
-
-        tk.Button(dialog, text="Найти", command=search).pack()
-
-    def search_currency(self, code):
-        if not self.currency_data:
-            self.update_status("Данные еще не загружены")
-            return
-
-        self.result_text.delete(1.0, tk.END)
-
-        if code in self.currency_data:
-            info = self.currency_data[code]
-            self.result_text.insert(tk.END, f"НАЙДЕНО:\n")
-            self.result_text.insert(tk.END, "-" * 50 + "\n")
-            self.result_text.insert(tk.END, f"{code} – {info['Name']}\n")
-            self.result_text.insert(
-                tk.END, f"Курс: {info['Value']} руб. за {info['Nominal']}\n"
-            )
+            result_text.insert(END, f"Предыдущий курс: {info['Previous']} руб.\n")
         else:
-            self.result_text.insert(tk.END, f"Валюта {code} не найдена\n")
+            result_text.insert(END, f"Валюта {code} не найдена\n")
 
-    def load_groups(self):
-        try:
-            with open(self.save_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except FileNotFoundError:
-            return {}
+    Button(dialog, text="Найти", command=search).pack()
 
-    def save_groups(self):
-        with open(self.save_file, "w", encoding="utf-8") as f:
-            json.dump(self.groups, f, ensure_ascii=False, indent=4)
 
-    def create_group_dialog(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Создать группу")
-        dialog.geometry("250x120")
+def create_group():
+    dialog = Toplevel(root)
+    dialog.title("Создать группу")
+    dialog.geometry("250x120")
 
-        tk.Label(dialog, text="Название группы:").pack(pady=5)
-        entry = tk.Entry(dialog)
-        entry.pack(pady=5)
+    Label(dialog, text="Название группы:").pack(pady=5)
+    entry = Entry(dialog)
+    entry.pack(pady=5)
 
-        def create():
-            name = entry.get().strip()
-            if name:
-                if name not in self.groups:
-                    self.groups[name] = []
-                    self.save_groups()
-                    self.update_status(f"Группа '{name}' создана")
-                else:
-                    self.update_status(f"Группа '{name}' уже есть")
+    def create():
+        name = entry.get().strip()
+        if name:
+            if name not in groups:
+                groups[name] = []
+                with open(save_file, "w", encoding="utf-8") as f:
+                    json.dump(groups, f, ensure_ascii=False, indent=4)
+                status.config(text=f"Группа '{name}' создана")
+            else:
+                status.config(text=f"Группа '{name}' уже есть")
+        dialog.destroy()
+
+    Button(dialog, text="Создать", command=create).pack()
+
+
+def show_groups():
+    result_text.delete(1.0, END)
+
+    if not groups:
+        result_text.insert(END, "У вас нет групп\n")
+        return
+
+    result_text.insert(END, "ВАШИ ГРУППЫ:\n")
+    result_text.insert(END, "-" * 40 + "\n")
+
+    for name, currencies in groups.items():
+        if currencies:
+            result_text.insert(END, f"{name}: {', '.join(currencies)}\n")
+        else:
+            result_text.insert(END, f"{name}: пусто\n")
+
+    result_text.see(END)
+
+
+def add_to_group():
+    if not groups:
+        messagebox.showinfo("Информация", "Сначала создайте группу")
+        return
+
+    dialog = Toplevel(root)
+    dialog.title("Добавить в группу")
+    dialog.geometry("250x150")
+
+    Label(dialog, text="Группа:").pack()
+    group_var = StringVar()
+    group_menu = OptionMenu(dialog, group_var, *groups.keys())
+    group_menu.pack()
+
+    Label(dialog, text="Код валюты:").pack()
+    entry = Entry(dialog)
+    entry.pack()
+
+    def add():
+        group = group_var.get()
+        code = entry.get().upper().strip()
+
+        if not group or not code:
+            return
+
+        if code not in data:
+            status.config(text=f"Валюта {code} не найдена")
+            dialog.destroy()
+            return
+
+        if code in groups[group]:
+            status.config(text=f"Валюта {code} уже в группе")
+        else:
+            groups[group].append(code)
+            with open(save_file, "w", encoding="utf-8") as f:
+                json.dump(groups, f, ensure_ascii=False, indent=4)
+            status.config(text=f"Валюта {code} добавлена")
+
+        dialog.destroy()
+
+    Button(dialog, text="Добавить", command=add).pack()
+
+
+def remove_from_group():
+    if not groups:
+        messagebox.showinfo("Информация", "У вас нет групп")
+        return
+
+    dialog = Toplevel(root)
+    dialog.title("Удалить из группы")
+    dialog.geometry("250x120")
+
+    Label(dialog, text="Группа:").pack()
+    group_var = StringVar()
+    group_menu = OptionMenu(dialog, group_var, *groups.keys())
+    group_menu.pack()
+
+    def show_remove():
+        group = group_var.get()
+        if not group:
+            return
+
+        if not groups[group]:
+            status.config(text=f"В группе {group} нет валют")
+            dialog.destroy()
+            return
+
+        remove_dialog = Toplevel(dialog)
+        remove_dialog.title("Выберите валюту")
+        remove_dialog.geometry("200x150")
+
+        Label(remove_dialog, text="Валюта:").pack()
+        currency_var = StringVar()
+        currency_menu = OptionMenu(remove_dialog, currency_var, *groups[group])
+        currency_menu.pack()
+
+        def remove():
+            currency = currency_var.get()
+            groups[group].remove(currency)
+            with open(save_file, "w", encoding="utf-8") as f:
+                json.dump(groups, f, ensure_ascii=False, indent=4)
+            status.config(text=f"Валюта {currency} удалена")
+            remove_dialog.destroy()
             dialog.destroy()
 
-        tk.Button(dialog, text="Создать", command=create).pack()
+        Button(remove_dialog, text="Удалить", command=remove).pack()
 
-    def show_groups(self):
-        self.result_text.delete(1.0, tk.END)
-
-        if not self.groups:
-            self.result_text.insert(tk.END, "Нет созданных групп\n")
-            return
-
-        self.result_text.insert(tk.END, "МОИ ГРУППЫ:\n")
-        self.result_text.insert(tk.END, "-" * 50 + "\n")
-
-        for name, currencies in self.groups.items():
-            if currencies:
-                self.result_text.insert(tk.END, f"{name}: {', '.join(currencies)}\n")
-            else:
-                self.result_text.insert(tk.END, f"{name}: пусто\n")
-
-    def add_to_group_dialog(self):
-        if not self.groups:
-            self.update_status("Нет групп. Сначала создайте группу")
-            return
-
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Добавить в группу")
-        dialog.geometry("250x150")
-
-        tk.Label(dialog, text="Группа:").pack()
-        group_var = tk.StringVar()
-        group_menu = tk.OptionMenu(dialog, group_var, *self.groups.keys())
-        group_menu.pack()
-
-        tk.Label(dialog, text="Код валюты:").pack()
-        entry = tk.Entry(dialog)
-        entry.pack()
-
-        def add():
-            group = group_var.get()
-            code = entry.get().upper().strip()
-
-            if not group or not code:
-                return
-
-            if code not in self.currency_data:
-                self.update_status(f"Валюта {code} не найдена")
-                dialog.destroy()
-                return
-
-            if code in self.groups[group]:
-                self.update_status(f"Валюта {code} уже в группе")
-            else:
-                self.groups[group].append(code)
-                self.save_groups()
-                self.update_status(f"Валюта {code} добавлена в {group}")
-
-            dialog.destroy()
-
-        tk.Button(dialog, text="Добавить", command=add).pack()
-
-    def remove_from_group_dialog(self):
-        if not self.groups:
-            self.update_status("Нет групп")
-            return
-
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Удалить из группы")
-        dialog.geometry("250x120")
-
-        tk.Label(dialog, text="Группа:").pack()
-        group_var = tk.StringVar()
-        group_menu = tk.OptionMenu(dialog, group_var, *self.groups.keys())
-        group_menu.pack()
-
-        def show_remove():
-            group = group_var.get()
-            if not group or group not in self.groups:
-                return
-
-            if not self.groups[group]:
-                self.update_status(f"В группе {group} нет валют")
-                dialog.destroy()
-                return
-
-            remove_dialog = tk.Toplevel(dialog)
-            remove_dialog.title("Выберите валюту")
-            remove_dialog.geometry("200x150")
-
-            tk.Label(remove_dialog, text="Валюта:").pack()
-            currency_var = tk.StringVar()
-            currency_menu = tk.OptionMenu(
-                remove_dialog, currency_var, *self.groups[group]
-            )
-            currency_menu.pack()
-
-            def remove():
-                currency = currency_var.get()
-                self.groups[group].remove(currency)
-                self.save_groups()
-                self.update_status(f"Валюта {currency} удалена из {group}")
-                remove_dialog.destroy()
-                dialog.destroy()
-
-            tk.Button(remove_dialog, text="Удалить", command=remove).pack()
-
-        tk.Button(dialog, text="Далее", command=show_remove).pack()
-
-    def update_status(self, message):
-        self.status.config(text=message)
+    Button(dialog, text="Далее", command=show_remove).pack()
 
 
-def main():
-    root = tk.Tk()
-    app = CurrencyApp(root)
-    root.mainloop()
+btn_frame = Frame(root)
+btn_frame.pack(pady=5)
 
+Button(btn_frame, text="Все валюты", width=15, command=show_all).pack(
+    side="left", padx=2
+)
+Button(btn_frame, text="Найти", width=15, command=search_dialog).pack(
+    side="left", padx=2
+)
+Button(btn_frame, text="Создать группу", width=15, command=create_group).pack(
+    side="left", padx=2
+)
+Button(btn_frame, text="Мои группы", width=15, command=show_groups).pack(
+    side="left", padx=2
+)
+Button(btn_frame, text="Добавить в группу", width=15, command=add_to_group).pack(
+    side="left", padx=2
+)
+Button(btn_frame, text="Удалить из группы", width=15, command=remove_from_group).pack(
+    side="left", padx=2
+)
 
-if __name__ == "__main__":
-    main()
+Label(root, text="Результаты:").pack()
+result_text = scrolledtext.ScrolledText(root, height=15)
+result_text.pack(fill="both", padx=10, pady=5, expand=True)
+
+status = Label(root, text=status_text, bd=1, relief="sunken", anchor="w")
+status.pack(fill="x", padx=10, pady=2)
+
+root.mainloop()

@@ -1,107 +1,84 @@
-import tkinter as tk
+from tkinter import *
 from tkinter import scrolledtext
 import psutil
 import platform
-import threading
+import os
+
+if not os.path.exists("resource"):
+    os.makedirs("resource")
+
+root = Tk()
+root.title("Системный монитор")
+root.geometry("600x500")
+
+Label(root, text="СИСТЕМНЫЙ МОНИТОР", font=("Arial", 16, "bold")).pack(pady=10)
+
+info_label = Label(root, text="", font=("Arial", 10))
+info_label.pack()
+
+os_info = f"ОС: {platform.system()} {platform.release()}"
+cpu_info = f"Процессор: {platform.processor()}"
+info_label.config(text=f"{os_info}\n{cpu_info}")
+
+result_text = scrolledtext.ScrolledText(root, height=18)
+result_text.pack(fill="both", padx=10, pady=5, expand=True)
+
+status = Label(root, text="Готов", bd=1, relief="sunken", anchor="w")
+status.pack(fill="x", padx=10, pady=2)
 
 
-class SystemMonitorApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Системный монитор")
-        self.root.geometry("600x400")
+def get_system_info():
+    result_text.delete(1.0, END)
+    status.config(text="Сбор информации...")
+    root.update()
 
-        tk.Label(root, text="СИСТЕМНЫЙ МОНИТОР", font=("Arial", 14, "bold")).pack(
-            pady=10
-        )
+    result_text.insert(END, "1. ЗАГРУЗКА CPU:\n")
 
-        tk.Label(root, text=f"ОС: {platform.system()} {platform.release()}").pack()
+    cpu_count = psutil.cpu_count()
+    result_text.insert(END, f"Процессоров (ядер): {cpu_count}\n")
 
-        self.check_btn = tk.Button(
-            root,
-            text="ПОКАЗАТЬ ИНФОРМАЦИЮ",
-            bg="lightblue",
-            font=("Arial", 11, "bold"),
-            command=self.start_monitor,
-        )
-        self.check_btn.pack(pady=10)
+    cpu_percent = psutil.cpu_percent(interval=1)
+    result_text.insert(END, f"Общая загрузка: {cpu_percent}%\n")
 
-        self.result_text = scrolledtext.ScrolledText(root, height=15)
-        self.result_text.pack(fill="both", padx=10, pady=5, expand=True)
+    per_core = psutil.cpu_percent(interval=1, percpu=True)
+    i = 1
+    for core in per_core:
+        result_text.insert(END, f"Ядро {i}: {core}%\n")
+        i += 1
+    result_text.insert(END, "\n")
 
-        self.status = tk.Label(
-            root, text="Готов к работе", bd=1, relief="sunken", anchor="w"
-        )
-        self.status.pack(fill="x", padx=10, pady=2)
+    result_text.insert(END, "2. ОПЕРАТИВНАЯ ПАМЯТЬ:\n")
+    memory = psutil.virtual_memory()
+    total_gb = memory.total / (1024**3)
+    used_gb = memory.used / (1024**3)
+    free_gb = memory.available / (1024**3)
 
-    def start_monitor(self):
-        self.result_text.delete(1.0, tk.END)
-        self.check_btn.config(state="disabled")
-        self.status.config(text="Сбор информации...")
+    result_text.insert(END, f"Всего: {total_gb:.2f} ГБ\n")
+    result_text.insert(END, f"Использовано: {used_gb:.2f} ГБ\n")
+    result_text.insert(END, f"Свободно: {free_gb:.2f} ГБ\n")
+    result_text.insert(END, f"Загруженность: {memory.percent}%\n\n")
 
-        thread = threading.Thread(target=self.get_system_info)
-        thread.daemon = True
-        thread.start()
+    result_text.insert(END, "3. ЗАГРУЖЕННОСТЬ ДИСКА:\n")
+    disk = psutil.disk_usage("/")
+    total_disk = disk.total / (1024**3)
+    used_disk = disk.used / (1024**3)
+    free_disk = disk.free / (1024**3)
 
-    def get_system_info(self):
-        self.root.after(0, self.add_result, "1. ЗАГРУЗКА CPU:")
+    result_text.insert(END, f"Всего: {total_disk:.2f} ГБ\n")
+    result_text.insert(END, f"Использовано: {used_disk:.2f} ГБ\n")
+    result_text.insert(END, f"Свободно: {free_disk:.2f} ГБ\n")
+    result_text.insert(END, f"Загруженность: {disk.percent}%\n")
 
-        cpu_percent = psutil.cpu_percent(interval=1)
-        cpu_count = psutil.cpu_count()
-
-        self.root.after(0, self.add_result, f"   Процессоров: {cpu_count}")
-        self.root.after(0, self.add_result, f"   Загрузка: {cpu_percent}%")
-
-        cpu_percent_per_core = psutil.cpu_percent(interval=1, percpu=True)
-        for i, core in enumerate(cpu_percent_per_core):
-            self.root.after(0, self.add_result, f"   Ядро {i+1}: {core}%")
-
-        self.root.after(0, self.add_result, "")
-        self.root.after(0, self.add_result, "2. ОПЕРАТИВНАЯ ПАМЯТЬ:")
-
-        memory = psutil.virtual_memory()
-        self.root.after(
-            0, self.add_result, f"   Всего: {memory.total / (1024**3):.2f} ГБ"
-        )
-        self.root.after(
-            0, self.add_result, f"   Использовано: {memory.used / (1024**3):.2f} ГБ"
-        )
-        self.root.after(
-            0, self.add_result, f"   Свободно: {memory.available / (1024**3):.2f} ГБ"
-        )
-        self.root.after(0, self.add_result, f"   Загруженность: {memory.percent}%")
-
-        self.root.after(0, self.add_result, "")
-        self.root.after(0, self.add_result, "3. ЗАГРУЖЕННОСТЬ ДИСКА:")
-
-        disk = psutil.disk_usage("/")
-        self.root.after(
-            0, self.add_result, f"   Всего: {disk.total / (1024**3):.2f} ГБ"
-        )
-        self.root.after(
-            0, self.add_result, f"   Использовано: {disk.used / (1024**3):.2f} ГБ"
-        )
-        self.root.after(
-            0, self.add_result, f"   Свободно: {disk.free / (1024**3):.2f} ГБ"
-        )
-        self.root.after(0, self.add_result, f"   Загруженность: {disk.percent}%")
-
-        self.root.after(0, self.monitor_finished)
-
-    def add_result(self, text):
-        self.result_text.insert(tk.END, text + "\n")
-        self.result_text.see(tk.END)
-
-    def monitor_finished(self):
-        self.status.config(text="Информация собрана")
-        self.check_btn.config(state="normal")
+    result_text.see(END)
+    status.config(text="Информация собрана")
 
 
-def main():
-    root = tk.Tk()
-    app = SystemMonitorApp(root)
-    root.mainloop()
+Button(
+    root,
+    text="СОБРАТЬ ИНФОРМАЦИЮ",
+    bg="lightblue",
+    font=("Arial", 11, "bold"),
+    command=get_system_info,
+).pack(pady=10)
 
-
-if __name__ == "__main__":
-    main()
+root.mainloop()

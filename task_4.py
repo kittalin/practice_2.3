@@ -1,231 +1,174 @@
-import tkinter as tk
-from tkinter import scrolledtext
+from tkinter import *
+from tkinter import scrolledtext, messagebox
 import requests
-import threading
+import os
+
+if not os.path.exists("resource"):
+    os.makedirs("resource")
+
+base_url = "https://api.github.com"
+
+root = Tk()
+root.title("GitHub API")
+root.geometry("650x550")
+
+Label(root, text="GITHUB API", font=("Arial", 16, "bold")).pack(pady=10)
 
 
-class GitHubApp:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("GitHub API")
-        self.root.geometry("600x500")
+def profile_dialog():
+    dialog = Toplevel(root)
+    dialog.title("Профиль пользователя")
+    dialog.geometry("250x100")
 
-        self.base_url = "https://api.github.com"
+    Label(dialog, text="Имя пользователя:").pack(pady=5)
+    entry = Entry(dialog)
+    entry.pack(pady=5)
 
-        tk.Label(root, text="GITHUB API", font=("Arial", 14, "bold")).pack(pady=5)
+    def get_profile():
+        username = entry.get().strip()
+        if username:
+            dialog.destroy()
 
-        tk.Label(root, text="Выберите действие:").pack()
+            result_text.delete(1.0, END)
+            status.config(text="Загрузка...")
+            root.update()
 
-        btn_frame = tk.Frame(root)
-        btn_frame.pack(pady=5)
-
-        tk.Button(
-            btn_frame,
-            text="1. Профиль пользователя",
-            width=25,
-            command=self.profile_dialog,
-        ).pack(pady=2)
-        tk.Button(
-            btn_frame,
-            text="2. Репозитории пользователя",
-            width=25,
-            command=self.repos_dialog,
-        ).pack(pady=2)
-        tk.Button(
-            btn_frame,
-            text="3. Поиск репозиториев",
-            width=25,
-            command=self.search_dialog,
-        ).pack(pady=2)
-
-        tk.Label(root, text="Результаты:").pack()
-        self.result_text = scrolledtext.ScrolledText(root, height=18)
-        self.result_text.pack(fill="both", padx=10, pady=5, expand=True)
-
-        self.status = tk.Label(
-            root, text="Готов к работе", bd=1, relief="sunken", anchor="w"
-        )
-        self.status.pack(fill="x", padx=10, pady=2)
-
-    def profile_dialog(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Профиль пользователя")
-        dialog.geometry("250x100")
-
-        tk.Label(dialog, text="Введите имя пользователя:").pack(pady=5)
-        self.profile_entry = tk.Entry(dialog)
-        self.profile_entry.pack(pady=5)
-
-        def get_profile():
-            username = self.profile_entry.get().strip()
-            if username:
-                dialog.destroy()
-                self.get_user_profile(username)
-
-        tk.Button(dialog, text="Найти", command=get_profile).pack()
-
-    def get_user_profile(self, username):
-        self.result_text.delete(1.0, tk.END)
-        self.status.config(text="Загрузка...")
-
-        def fetch():
             try:
-                response = requests.get(f"{self.base_url}/users/{username}", timeout=5)
+                response = requests.get(f"{base_url}/users/{username}", timeout=5)
 
                 if response.status_code == 200:
                     data = response.json()
 
                     name = data.get("name", "Не указано")
                     html_url = data["html_url"]
-                    public_repos = data["public_repos"]
+                    repos = data["public_repos"]
                     following = data["following"]
                     followers = data["followers"]
-                    public_gists = data["public_gists"]
+                    gists = data["public_gists"]
 
-                    self.root.after(
-                        0,
-                        self.display_profile,
-                        name,
-                        html_url,
-                        public_repos,
-                        following,
-                        followers,
-                        public_gists,
-                    )
+                    result_text.insert(END, "ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:\n")
+                    result_text.insert(END, "-" * 40 + "\n")
+                    result_text.insert(END, f"Имя: {name}\n")
+                    result_text.insert(END, f"Ссылка: {html_url}\n")
+                    result_text.insert(END, f"Репозитории: {repos}\n")
+                    result_text.insert(END, f"Подписки: {following}\n")
+                    result_text.insert(END, f"Подписчики: {followers}\n")
+                    result_text.insert(END, f"Gists: {gists}\n")
 
+                    status.config(text="Готово")
                 elif response.status_code == 404:
-                    self.root.after(
-                        0, self.show_result, f"Пользователь {username} не найден"
-                    )
+                    result_text.insert(END, f"Пользователь {username} не найден\n")
+                    status.config(text="Не найден")
                 else:
-                    self.root.after(
-                        0, self.show_result, f"Ошибка: {response.status_code}"
-                    )
+                    result_text.insert(END, f"Ошибка: {response.status_code}\n")
+                    status.config(text="Ошибка")
 
-            except Exception as e:
-                self.root.after(0, self.show_result, f"Ошибка: {str(e)}")
+            except requests.exceptions.ConnectionError:
+                result_text.insert(END, "Ошибка: нет соединения с GitHub\n")
+                status.config(text="Ошибка соединения")
+            except:
+                result_text.insert(END, "Ошибка\n")
+                status.config(text="Ошибка")
 
-        thread = threading.Thread(target=fetch)
-        thread.daemon = True
-        thread.start()
+    Button(dialog, text="Найти", command=get_profile).pack()
 
-    def display_profile(self, name, url, repos, following, followers, gists):
-        self.result_text.delete(1.0, tk.END)
-        self.result_text.insert(tk.END, "ПРОФИЛЬ ПОЛЬЗОВАТЕЛЯ:\n")
-        self.result_text.insert(tk.END, "-" * 50 + "\n")
-        self.result_text.insert(tk.END, f"Имя: {name}\n")
-        self.result_text.insert(tk.END, f"Ссылка на профиль: {url}\n")
-        self.result_text.insert(tk.END, f"Количество репозиториев: {repos}\n")
-        self.result_text.insert(tk.END, f"Количество обсуждений (gists): {gists}\n")
-        self.result_text.insert(tk.END, f"Количество подписок: {following}\n")
-        self.result_text.insert(tk.END, f"Количество подписчиков: {followers}\n")
-        self.status.config(text="Готово")
 
-    def repos_dialog(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Репозитории пользователя")
-        dialog.geometry("250x100")
+def repos_dialog():
+    dialog = Toplevel(root)
+    dialog.title("Репозитории пользователя")
+    dialog.geometry("250x100")
 
-        tk.Label(dialog, text="Введите имя пользователя:").pack(pady=5)
-        self.repos_entry = tk.Entry(dialog)
-        self.repos_entry.pack(pady=5)
+    Label(dialog, text="Имя пользователя:").pack(pady=5)
+    entry = Entry(dialog)
+    entry.pack(pady=5)
 
-        def get_repos():
-            username = self.repos_entry.get().strip()
-            if username:
-                dialog.destroy()
-                self.get_user_repos(username)
+    def get_repos():
+        username = entry.get().strip()
+        if username:
+            dialog.destroy()
 
-        tk.Button(dialog, text="Найти", command=get_repos).pack()
+            result_text.delete(1.0, END)
+            status.config(text="Загрузка...")
+            root.update()
 
-    def get_user_repos(self, username):
-        self.result_text.delete(1.0, tk.END)
-        self.status.config(text="Загрузка...")
-
-        def fetch():
             try:
-                response = requests.get(
-                    f"{self.base_url}/users/{username}/repos", timeout=5
-                )
+                response = requests.get(f"{base_url}/users/{username}/repos", timeout=5)
 
                 if response.status_code == 200:
                     repos = response.json()
 
                     if not repos:
-                        self.root.after(
-                            0,
-                            self.show_result,
-                            f"У пользователя {username} нет репозиториев",
+                        result_text.insert(
+                            END, f"У пользователя {username} нет репозиториев\n"
                         )
+                        status.config(text="Готово")
                         return
 
-                    self.root.after(0, self.display_repos, repos)
+                    result_text.insert(END, f"РЕПОЗИТОРИИ {username}:\n")
+                    result_text.insert(END, "-" * 70 + "\n")
 
+                    i = 1
+                    for repo in repos[:10]:
+                        name = repo["name"]
+                        html_url = repo["html_url"]
+                        watchers = repo.get("watchers_count", 0)
+                        language = repo.get("language", "Не указан")
+                        private = repo["private"]
+                        visibility = "Публичный" if not private else "Приватный"
+                        default_branch = repo["default_branch"]
+
+                        result_text.insert(END, f"\n{i}. {name}\n")
+                        result_text.insert(END, f"Ссылка: {html_url}\n")
+                        result_text.insert(END, f"Просмотры: {watchers}\n")
+                        result_text.insert(END, f"Язык: {language}\n")
+                        result_text.insert(END, f"Видимость: {visibility}\n")
+                        result_text.insert(END, f"Ветка: {default_branch}\n")
+                        i += 1
+
+                    if len(repos) > 10:
+                        result_text.insert(
+                            END, f"\n... и еще {len(repos) - 10} репозиториев\n"
+                        )
+
+                    status.config(text="Готово")
                 elif response.status_code == 404:
-                    self.root.after(
-                        0, self.show_result, f"Пользователь {username} не найден"
-                    )
+                    result_text.insert(END, f"Пользователь {username} не найден\n")
+                    status.config(text="Не найден")
                 else:
-                    self.root.after(
-                        0, self.show_result, f"Ошибка: {response.status_code}"
-                    )
+                    result_text.insert(END, f"Ошибка: {response.status_code}\n")
+                    status.config(text="Ошибка")
 
-            except Exception as e:
-                self.root.after(0, self.show_result, f"Ошибка: {str(e)}")
+            except requests.exceptions.ConnectionError:
+                result_text.insert(END, "Ошибка: нет соединения с GitHub\n")
+                status.config(text="Ошибка соединения")
+            except:
+                result_text.insert(END, "Ошибка\n")
+                status.config(text="Ошибка")
 
-        thread = threading.Thread(target=fetch)
-        thread.daemon = True
-        thread.start()
+    Button(dialog, text="Найти", command=get_repos).pack()
 
-    def display_repos(self, repos):
-        self.result_text.delete(1.0, tk.END)
-        self.result_text.insert(tk.END, f"РЕПОЗИТОРИИ ПОЛЬЗОВАТЕЛЯ:\n")
-        self.result_text.insert(tk.END, "-" * 70 + "\n")
 
-        for repo in repos[:10]:
-            name = repo["name"]
-            html_url = repo["html_url"]
-            watchers = repo.get("watchers_count", 0)
-            language = repo.get("language", "Не указан")
-            private = repo["private"]
-            visibility = "Публичный" if not private else "Приватный"
-            default_branch = repo["default_branch"]
+def search_dialog():
+    dialog = Toplevel(root)
+    dialog.title("Поиск репозиториев")
+    dialog.geometry("250x100")
 
-            self.result_text.insert(tk.END, f"\nНазвание: {name}\n")
-            self.result_text.insert(tk.END, f"Ссылка на репозиторий: {html_url}\n")
-            self.result_text.insert(tk.END, f"Количество просмотров: {watchers}\n")
-            self.result_text.insert(tk.END, f"Используемый язык: {language}\n")
-            self.result_text.insert(tk.END, f"Видимость: {visibility}\n")
-            self.result_text.insert(tk.END, f"Ветка по умолчанию: {default_branch}\n")
-            self.result_text.insert(tk.END, "-" * 40 + "\n")
+    Label(dialog, text="Название для поиска:").pack(pady=5)
+    entry = Entry(dialog)
+    entry.pack(pady=5)
 
-        self.status.config(text="Готово")
+    def search():
+        query = entry.get().strip()
+        if query:
+            dialog.destroy()
 
-    def search_dialog(self):
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Поиск репозиториев")
-        dialog.geometry("250x100")
+            result_text.delete(1.0, END)
+            status.config(text="Поиск...")
+            root.update()
 
-        tk.Label(dialog, text="Введите название для поиска:").pack(pady=5)
-        self.search_entry = tk.Entry(dialog)
-        self.search_entry.pack(pady=5)
-
-        def search():
-            query = self.search_entry.get().strip()
-            if query:
-                dialog.destroy()
-                self.search_repositories(query)
-
-        tk.Button(dialog, text="Найти", command=search).pack()
-
-    def search_repositories(self, query):
-        self.result_text.delete(1.0, tk.END)
-        self.status.config(text="Поиск...")
-
-        def fetch():
             try:
                 response = requests.get(
-                    f"{self.base_url}/search/repositories?q={query}", timeout=5
+                    f"{base_url}/search/repositories?q={query}", timeout=5
                 )
 
                 if response.status_code == 200:
@@ -233,64 +176,76 @@ class GitHubApp:
                     total = data["total_count"]
 
                     if total == 0:
-                        self.root.after(
-                            0,
-                            self.show_result,
-                            f"Репозитории по запросу '{query}' не найдены",
+                        result_text.insert(
+                            END, f"Репозитории по запросу '{query}' не найдены\n"
                         )
+                        status.config(text="Готово")
                         return
 
-                    self.root.after(
-                        0, self.display_search_results, data["items"][:10], total, query
-                    )
+                    result_text.insert(END, f"РЕЗУЛЬТАТЫ ПОИСКА: {query}\n")
+                    result_text.insert(END, f"Найдено: {total} репозиториев\n")
+                    result_text.insert(END, "-" * 70 + "\n")
 
+                    i = 1
+                    for repo in data["items"][:10]:
+                        name = repo["name"]
+                        owner = repo["owner"]["login"]
+                        html_url = repo["html_url"]
+                        description = repo.get("description", "Нет описания")
+                        language = repo.get("language", "Не указан")
+                        stars = repo["stargazers_count"]
+
+                        result_text.insert(END, f"\n{i}. {name}\n")
+                        result_text.insert(END, f"Владелец: {owner}\n")
+                        result_text.insert(END, f"Ссылка: {html_url}\n")
+                        if len(description) > 100:
+                            result_text.insert(
+                                END, f"Описание: {description[:100]}...\n"
+                            )
+                        else:
+                            result_text.insert(END, f"Описание: {description}\n")
+                        result_text.insert(END, f"Язык: {language}\n")
+                        result_text.insert(END, f"Звезды: {stars}\n")
+                        i += 1
+
+                    if total > 10:
+                        result_text.insert(
+                            END, f"\n... и еще {total - 10} репозиториев\n"
+                        )
+
+                    status.config(text="Готово")
                 else:
-                    self.root.after(
-                        0, self.show_result, f"Ошибка: {response.status_code}"
-                    )
+                    result_text.insert(END, f"Ошибка: {response.status_code}\n")
+                    status.config(text="Ошибка")
 
-            except Exception as e:
-                self.root.after(0, self.show_result, f"Ошибка: {str(e)}")
+            except requests.exceptions.ConnectionError:
+                result_text.insert(END, "Ошибка: нет соединения с GitHub\n")
+                status.config(text="Ошибка соединения")
+            except:
+                result_text.insert(END, "Ошибка\n")
+                status.config(text="Ошибка")
 
-        thread = threading.Thread(target=fetch)
-        thread.daemon = True
-        thread.start()
-
-    def display_search_results(self, items, total, query):
-        self.result_text.delete(1.0, tk.END)
-        self.result_text.insert(tk.END, f"РЕЗУЛЬТАТЫ ПОИСКА: {query}\n")
-        self.result_text.insert(tk.END, f"Найдено: {total} репозиториев\n")
-        self.result_text.insert(tk.END, "-" * 70 + "\n")
-
-        for repo in items:
-            name = repo["name"]
-            owner = repo["owner"]["login"]
-            html_url = repo["html_url"]
-            description = repo.get("description", "Нет описания")
-            language = repo.get("language", "Не указан")
-            stars = repo["stargazers_count"]
-
-            self.result_text.insert(tk.END, f"\nНазвание: {name}\n")
-            self.result_text.insert(tk.END, f"Владелец: {owner}\n")
-            self.result_text.insert(tk.END, f"Ссылка: {html_url}\n")
-            self.result_text.insert(tk.END, f"Описание: {description}\n")
-            self.result_text.insert(tk.END, f"Язык: {language}\n")
-            self.result_text.insert(tk.END, f"Звезды: {stars}\n")
-            self.result_text.insert(tk.END, "-" * 40 + "\n")
-
-        self.status.config(text="Готово")
-
-    def show_result(self, message):
-        self.result_text.delete(1.0, tk.END)
-        self.result_text.insert(tk.END, message + "\n")
-        self.status.config(text="Готово")
+    Button(dialog, text="Найти", command=search).pack()
 
 
-def main():
-    root = tk.Tk()
-    app = GitHubApp(root)
-    root.mainloop()
+btn_frame = Frame(root)
+btn_frame.pack(pady=5)
 
+Button(btn_frame, text="Профиль", width=12, command=profile_dialog).pack(
+    side="left", padx=2
+)
+Button(btn_frame, text="Репозитории", width=12, command=repos_dialog).pack(
+    side="left", padx=2
+)
+Button(btn_frame, text="Поиск", width=12, command=search_dialog).pack(
+    side="left", padx=2
+)
 
-if __name__ == "__main__":
-    main()
+Label(root, text="Результаты:").pack()
+result_text = scrolledtext.ScrolledText(root, height=20)
+result_text.pack(fill="both", padx=10, pady=5, expand=True)
+
+status = Label(root, text="Готов", bd=1, relief="sunken", anchor="w")
+status.pack(fill="x", padx=10, pady=2)
+
+root.mainloop()
